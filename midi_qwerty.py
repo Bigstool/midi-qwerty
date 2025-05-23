@@ -42,8 +42,8 @@ def main():
         76: Key.down,
         77: Key.right,
         78: Key.enter,
-        79: Key.shift_r
-        # Add more as needed!
+        79: Key.shift_r,
+        -64: Key.shift_l,  # damper pedal
     }
     key_repeat_delay = 0.5  # delay before starting repeat
     key_repeat_interval = 0.05  # seconds between repeated characters
@@ -75,13 +75,12 @@ def main():
                 elif msg.type == 'control_change' and msg.control == 64:
                     key = Key.shift_l
                     if msg.value >= 64 and not damper_on:
-                        keyboard.press(key)
+                        note_on(keyboard, note_to_key, repeat_threads, stop_flags,
+                                key_repeat_delay, key_repeat_interval, -64)
                         damper_on = True
-                        print(f"🎛️ Damper down → Press {key}")
                     elif msg.value < 64 and damper_on:
-                        keyboard.release(key)
+                        note_off(keyboard, note_to_key, repeat_threads, stop_flags, -64)
                         damper_on = False
-                        print(f"🎛️ Damper up → Release {key}")
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
             for note in list(repeat_threads.keys()):
