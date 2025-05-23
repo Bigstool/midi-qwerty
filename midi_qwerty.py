@@ -45,9 +45,9 @@ def main():
         79: Key.shift_r
         # Add more as needed!
     }
-
-    key_repeat_interval = 0.05  # seconds between repeated characters
     key_repeat_delay = 0.5  # delay before starting repeat
+    key_repeat_interval = 0.05  # seconds between repeated characters
+
     repeat_threads = {}  # note -> thread
     stop_flags = {}  # note -> threading.Event
     damper_on = False
@@ -65,37 +65,13 @@ def main():
                 if msg.type in ['note_on', 'note_off'] and msg.note not in note_to_key:
                     continue
                 elif msg.type == 'note_on':
-                    note = msg.note
-                    key = note_to_key[note]
                     if msg.velocity > 0:
-                        if note not in repeat_threads:
-                            keyboard.press(key)
-                            stop_flags[note] = threading.Event()
-                            repeat_threads[note] = threading.Thread(
-                                target=repeat_key,
-                                args=(keyboard, key_repeat_delay, key_repeat_interval, key, stop_flags[note])
-                            )
-                            repeat_threads[note].daemon = True
-                            repeat_threads[note].start()
-                            print(f"⬇️ Note {note} → Press '{key}'")
+                        note_on(keyboard, note_to_key, repeat_threads, stop_flags,
+                                key_repeat_delay, key_repeat_interval, msg.note)
                     else:
-                        if note in repeat_threads:
-                            stop_flags[note].set()
-                            repeat_threads[note].join()
-                            del repeat_threads[note]
-                            del stop_flags[note]
-                            keyboard.release(key)
-                            print(f"⬆️ Note {note} → Release '{key}'")
+                        note_off(keyboard, note_to_key, repeat_threads, stop_flags, msg.note)
                 elif msg.type == 'note_off':
-                    note = msg.note
-                    key = note_to_key[note]
-                    if note in repeat_threads:
-                        stop_flags[note].set()
-                        repeat_threads[note].join()
-                        del repeat_threads[note]
-                        del stop_flags[note]
-                        keyboard.release(key)
-                        print(f"⬆️ Note {note} → Release '{key}'")
+                    note_off(keyboard, note_to_key, repeat_threads, stop_flags, msg.note)
                 elif msg.type == 'control_change' and msg.control == 64:
                     key = Key.shift_l
                     if msg.value >= 64 and not damper_on:
@@ -109,24 +85,37 @@ def main():
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
             for note in list(repeat_threads.keys()):
-                stop_flags[note].set()
-                repeat_threads[note].join()
-                del repeat_threads[note]
-                del stop_flags[note]
-                keyboard.release(note_to_key[note])
+                note_off(keyboard, note_to_key, repeat_threads, stop_flags, note)
 
 
-# def press_key(keyboard, note_to_key, repeat_threads, stop_flags, interval, note):
-#     key = note_to_key[note]
-#     keyboard.press(key)
-#     stop_flags[note] = threading.Event()
-#     repeat_threads[note] = threading.Thread(
-#         target=repeat_key,
-#         args=(keyboard, key, interval, key, stop_flags[note])
-#     )
-#     repeat_threads[note].daemon = True
-#     repeat_threads[note].start()
-#     print(f"⬇️ Note {note} → Press '{key}'")
+def note_on(keyboard, note_to_key, repeat_threads, stop_flags, delay, interval, note):
+    if note in repeat_threads:
+        print(f"Note {note} already pressed, skipping.")
+        return
+    key = note_to_key[note]
+    keyboard.press(key)
+    stop_flags[note] = threading.Event()
+    repeat_threads[note] = threading.Thread(
+        target=repeat_key,
+        args=(keyboard, delay, interval, key, stop_flags[note])
+    )
+    repeat_threads[note].daemon = True
+    repeat_threads[note].start()
+    print(f"⬇️ Note {note} → Press '{key}'")
+
+
+def note_off(keyboard, note_to_key, repeat_threads, stop_flags, note):
+    if note not in repeat_threads:
+        print(f"Note {note} not pressed, skipping.")
+        return
+    key = note_to_key[note]
+    stop_flags[note].set()
+    repeat_threads[note].join()
+    del repeat_threads[note]
+    del stop_flags[note]
+    keyboard.release(key)
+    print(f"⬆️ Note {note} → Release '{key}'")
+
 
 def repeat_key(keyboard, delay, interval, key, stop_event):
     delay_timestamp = time.time()
