@@ -44,7 +44,7 @@ def main():
         # Add more as needed!
     }
 
-    pressed_keys = set()
+    pressed_notes = set()
     damper_on = False
 
     print("Available MIDI input ports:")
@@ -57,26 +57,27 @@ def main():
     with mido.open_input(input_name) as inport:
         try:
             for msg in inport:
-                if msg.type == 'note_on':
+                if msg.type in ['note_on', 'note_off'] and msg.note not in note_to_key:
+                    continue
+                elif msg.type == 'note_on':
                     note = msg.note
-                    if note in note_to_key:
-                        key = note_to_key[note]
-                        if msg.velocity > 0:
-                            if note not in pressed_keys:
-                                keyboard.press(key)
-                                pressed_keys.add(note)
-                                print(f"⬇️ Note {note} → Press '{key}'")
-                        else:
-                            if note in pressed_keys:
-                                keyboard.release(key)
-                                pressed_keys.remove(note)
-                                print(f"⬆️ Note {note} → Release '{key}'")
+                    key = note_to_key[note]
+                    if msg.velocity > 0:
+                        if note not in pressed_notes:
+                            keyboard.press(key)
+                            pressed_notes.add(note)
+                            print(f"⬇️ Note {note} → Press '{key}'")
+                    else:
+                        if note in pressed_notes:
+                            keyboard.release(key)
+                            pressed_notes.remove(note)
+                            print(f"⬆️ Note {note} → Release '{key}'")
                 elif msg.type == 'note_off':
                     note = msg.note
-                    if note in note_to_key and note in pressed_keys:
+                    if note in pressed_notes:
                         key = note_to_key[note]
                         keyboard.release(key)
-                        pressed_keys.remove(note)
+                        pressed_notes.remove(note)
                         print(f"⬆️ Note {note} → Release '{key}'")
                 elif msg.type == 'control_change' and msg.control == 64:
                     key = Key.shift_l
@@ -90,7 +91,7 @@ def main():
                         print(f"🎛️ Damper up → Release {key}")
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
-            for note in list(pressed_keys):
+            for note in list(pressed_notes):
                 keyboard.release(note_to_key[note])
 
 
