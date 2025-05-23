@@ -124,7 +124,6 @@ def repeat_key(keyboard, delay, interval, key, stop_event):
         if time.time() - delay_timestamp > delay and \
                 time.time() - interval_timestamp > interval:
             keyboard.press(key)
-            keyboard.release(key)
             interval_timestamp = time.time()
 
 
