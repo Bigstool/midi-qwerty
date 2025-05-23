@@ -1,53 +1,23 @@
-import mido
-from pynput.keyboard import Controller, Key
+import json
 import threading
 import time
 
+import mido
+from pynput.keyboard import Controller, Key
+
 
 def main():
-    keyboard = Controller()
-
-    # Customize this mapping!
-    note_to_key = {
-        41: 'z',
-        42: Key.esc,
-        43: 'x',
-        45: 'c',
-        44: 'v',
-        46: Key.tab,
-        47: Key.ctrl_l,
-        48: Key.shift_l,
-        49: Key.alt_l,
-        50: 'a',
-        51: 'w',
-        52: 's',
-        53: 'd',
-        55: Key.space,
-        60: 'a',
-        61: 'b',
-        62: 'c',
-        63: 'd',
-        64: 'e',
-        65: 'f',
-        66: 'g',
-        67: 'h',
-        68: 'i',
-        69: 'j',
-        70: 'k',
-        71: 'l',
-        72: Key.alt_r,
-        73: Key.ctrl_r,
-        74: Key.left,
-        75: Key.up,
-        76: Key.down,
-        77: Key.right,
-        78: Key.enter,
-        79: Key.shift_r,
-        -64: Key.shift_l,  # damper pedal
-    }
+    # Load from json, convert strings back to Key objects
+    with open('keymap.json', 'r') as f:
+        keymap_json = json.load(f)
+        keymap = {
+            int(note): getattr(Key, key.split('.', 1)[1]) if key.startswith('Key.') else key
+                    for note, key in keymap_json.items()
+        }
     key_repeat_delay = 0.5  # delay before starting repeat
     key_repeat_interval = 0.05  # seconds between repeated characters
 
+    keyboard = Controller()
     repeat_threads = {}  # note -> thread
     stop_flags = {}  # note -> threading.Event
     damper_on = False
@@ -62,29 +32,29 @@ def main():
     with mido.open_input(input_name) as inport:
         try:
             for msg in inport:
-                if msg.type in ['note_on', 'note_off'] and msg.note not in note_to_key:
+                if msg.type in ['note_on', 'note_off'] and msg.note not in keymap:
                     continue
                 elif msg.type == 'note_on':
                     if msg.velocity > 0:
-                        note_on(keyboard, note_to_key, repeat_threads, stop_flags,
+                        note_on(keyboard, keymap, repeat_threads, stop_flags,
                                 key_repeat_delay, key_repeat_interval, msg.note)
                     else:
-                        note_off(keyboard, note_to_key, repeat_threads, stop_flags, msg.note)
+                        note_off(keyboard, keymap, repeat_threads, stop_flags, msg.note)
                 elif msg.type == 'note_off':
-                    note_off(keyboard, note_to_key, repeat_threads, stop_flags, msg.note)
+                    note_off(keyboard, keymap, repeat_threads, stop_flags, msg.note)
                 elif msg.type == 'control_change' and msg.control == 64:
                     key = Key.shift_l
                     if msg.value >= 64 and not damper_on:
-                        note_on(keyboard, note_to_key, repeat_threads, stop_flags,
+                        note_on(keyboard, keymap, repeat_threads, stop_flags,
                                 key_repeat_delay, key_repeat_interval, -64)
                         damper_on = True
                     elif msg.value < 64 and damper_on:
-                        note_off(keyboard, note_to_key, repeat_threads, stop_flags, -64)
+                        note_off(keyboard, keymap, repeat_threads, stop_flags, -64)
                         damper_on = False
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
             for note in list(repeat_threads.keys()):
-                note_off(keyboard, note_to_key, repeat_threads, stop_flags, note)
+                note_off(keyboard, keymap, repeat_threads, stop_flags, note)
 
 
 def note_on(keyboard, note_to_key, repeat_threads, stop_flags, delay, interval, note):
