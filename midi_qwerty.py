@@ -1,5 +1,7 @@
 import mido
 from pynput.keyboard import Controller, Key
+import threading
+import time
 
 
 def main():
@@ -44,7 +46,10 @@ def main():
         # Add more as needed!
     }
 
-    pressed_notes = set()
+    key_repeat_interval = 0.05  # seconds between repeated characters
+    key_repeat_delay = 0.5  # delay before starting repeat
+    repeat_threads = {}  # note -> thread
+    stop_flags = {}  # note -> threading.Event
     damper_on = False
 
     print("Available MIDI input ports:")
@@ -63,21 +68,33 @@ def main():
                     note = msg.note
                     key = note_to_key[note]
                     if msg.velocity > 0:
-                        if note not in pressed_notes:
+                        if note not in repeat_threads:
                             keyboard.press(key)
-                            pressed_notes.add(note)
+                            stop_flags[note] = threading.Event()
+                            repeat_threads[note] = threading.Thread(
+                                target=repeat_key,
+                                args=(keyboard, key_repeat_delay, key_repeat_interval, key, stop_flags[note])
+                            )
+                            repeat_threads[note].daemon = True
+                            repeat_threads[note].start()
                             print(f"⬇️ Note {note} → Press '{key}'")
                     else:
-                        if note in pressed_notes:
+                        if note in repeat_threads:
+                            stop_flags[note].set()
+                            repeat_threads[note].join()
+                            del repeat_threads[note]
+                            del stop_flags[note]
                             keyboard.release(key)
-                            pressed_notes.remove(note)
                             print(f"⬆️ Note {note} → Release '{key}'")
                 elif msg.type == 'note_off':
                     note = msg.note
-                    if note in pressed_notes:
-                        key = note_to_key[note]
+                    key = note_to_key[note]
+                    if note in repeat_threads:
+                        stop_flags[note].set()
+                        repeat_threads[note].join()
+                        del repeat_threads[note]
+                        del stop_flags[note]
                         keyboard.release(key)
-                        pressed_notes.remove(note)
                         print(f"⬆️ Note {note} → Release '{key}'")
                 elif msg.type == 'control_change' and msg.control == 64:
                     key = Key.shift_l
@@ -91,8 +108,32 @@ def main():
                         print(f"🎛️ Damper up → Release {key}")
         except KeyboardInterrupt:
             print("\n👋 Exiting.")
-            for note in list(pressed_notes):
+            for note in list(repeat_threads.keys()):
+                stop_flags[note].set()
+                repeat_threads[note].join()
+                del repeat_threads[note]
+                del stop_flags[note]
                 keyboard.release(note_to_key[note])
+
+
+# def press_key(keyboard, note_to_key, repeat_threads, stop_flags, interval, note):
+#     key = note_to_key[note]
+#     keyboard.press(key)
+#     stop_flags[note] = threading.Event()
+#     repeat_threads[note] = threading.Thread(
+#         target=repeat_key,
+#         args=(keyboard, key, interval, key, stop_flags[note])
+#     )
+#     repeat_threads[note].daemon = True
+#     repeat_threads[note].start()
+#     print(f"⬇️ Note {note} → Press '{key}'")
+
+def repeat_key(keyboard, delay, interval, key, stop_event):
+    time.sleep(delay)
+    while not stop_event.is_set():
+        keyboard.press(key)
+        keyboard.release(key)
+        time.sleep(interval)
 
 
 if __name__ == "__main__":
