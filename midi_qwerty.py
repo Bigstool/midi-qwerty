@@ -129,11 +129,14 @@ def main():
 #     print(f"⬇️ Note {note} → Press '{key}'")
 
 def repeat_key(keyboard, delay, interval, key, stop_event):
-    time.sleep(delay)
+    delay_timestamp = time.time()
+    interval_timestamp = time.time()
     while not stop_event.is_set():
-        keyboard.press(key)
-        keyboard.release(key)
-        time.sleep(interval)
+        if time.time() - delay_timestamp > delay and \
+                time.time() - interval_timestamp > interval:
+            keyboard.press(key)
+            keyboard.release(key)
+            interval_timestamp = time.time()
 
 
 if __name__ == "__main__":
