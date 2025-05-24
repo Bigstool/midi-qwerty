@@ -79,7 +79,6 @@ def note_off(keyboard, note_to_key, repeat_threads, stop_flags, note):
         return
     key = note_to_key[note]
     stop_flags[note].set()
-    repeat_threads[note].join()
     del repeat_threads[note]
     del stop_flags[note]
     keyboard.release(key)
